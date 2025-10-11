@@ -1,7 +1,7 @@
 {
   "name": "vault50bot",
   "version": "1.0.0",
-  "description": "Vault50 Telegram bot (webhook, Render-ready, optional deposit watchers)",
+  "description": "Vault50 Telegram bot (webhook-only, Render-friendly)",
   "main": "deposit-bot.js",
   "type": "module",
   "scripts": {
@@ -13,9 +13,9 @@
   "dependencies": {
     "@solana/web3.js": "^1.95.3",
     "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
     "ethers": "^6.13.2",
     "express": "^4.19.2",
-    "node-telegram-bot-api": "^0.66.0",
-    "dotenv": "^16.4.5"
+    "node-telegram-bot-api": "^0.66.0"
   }
 }
