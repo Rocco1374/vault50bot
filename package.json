@@ -1,0 +1,16 @@
+{
+  "name": "vault50bot",
+  "version": "1.0.0",
+  "description": "Telegram bot that tracks BTC/ETH/BNB/SOL deposits and posts to a channel.",
+  "main": "deposit-bot.js",
+  "scripts": {
+    "start": "node deposit-bot.js"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.95.3",
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.2",
+    "node-telegram-bot-api": "^0.66.0"
+  }
+}
