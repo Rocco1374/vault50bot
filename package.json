@@ -1,7 +1,7 @@
 {
   "name": "vault50bot",
   "version": "1.0.0",
-  "description": "Telegram bot that tracks BTC/ETH/BNB/SOL deposits and posts to a channel.",
+  "description": "Vault50 Telegram bot with auto-mode watchers and free-tier fallback.",
   "main": "deposit-bot.js",
   "scripts": {
     "start": "node deposit-bot.js"
