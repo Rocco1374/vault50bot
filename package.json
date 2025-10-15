@@ -1,13 +1,19 @@
 {
-  "type": "module",
+  "name": "vault50bot",
+  "version": "1.0.0",
+  "main": "deposit-bot.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node deposit-bot.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@solana/web3.js": "^1.95.3",
-    "axios": "^1.7.7",
+    "axios": "^1.7.3",
     "dotenv": "^16.4.5",
     "ethers": "^6.13.2",
-    "express": "^4.19.2",
     "node-telegram-bot-api": "^0.66.0"
-  },
-  "scripts": { "start": "node deposit-bot.js" },
-  "engines": { "node": ">=20" }
+  }
 }
