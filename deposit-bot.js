@@ -1,18 +1,17 @@
 try { require('dotenv').config(); } catch (_) {}
 
 const http = require('http');
-const url = require('url');
+const { URL } = require('url');
 const crypto = require('crypto');
 const axios = require('axios');
 const TelegramBot = require('node-telegram-bot-api');
 const { ethers } = require('ethers');
 const { Connection, PublicKey } = require('@solana/web3.js');
 
-// Env
-const TG_TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
-const CHAT_ID    = process.env.TELEGRAM_CHAT_ID;
+const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const PUBLIC_URL = process.env.PUBLIC_URL;
-const PORT       = Number(process.env.PORT || 10000);
+const PORT = Number(process.env.PORT || 10000);
 
 const ADMIN_IDS = (process.env.ADMIN_IDS || '')
   .split(',').map(s => s.trim()).filter(Boolean).map(Number);
@@ -39,19 +38,16 @@ const CONF = {
 
 const ENABLE_WATCHERS = String(process.env.ENABLE_WATCHERS || 'true').toLowerCase() === 'true';
 
-const DEFAULT_PROOF = process.env.PROOF_MESSAGE || 'Latest Proof of Payout\n(Share latest TX link + winner here)\nVerified on-chain.';
-
-// USD Round (mutable via commands)
-let ENTRY_USD        = Number(process.env.ENTRY_USD || 50);
+let ENTRY_USD = Number(process.env.ENTRY_USD || 50);
 let ROUND_TARGET_USD = Number(process.env.ROUND_TARGET_USD || 2000);
-let ENTRY_TOL        = Math.max(0, Math.min(0.5, Number(process.env.ENTRY_TOLERANCE_PCT || 0.10)));
-let PAYOUT_PCT       = Math.max(0.10, Math.min(1.00, Number(process.env.PAYOUT_PCT || 1.00)));
+let ENTRY_TOL = Math.max(0, Math.min(0.5, Number(process.env.ENTRY_TOLERANCE_PCT || 0.10)));
+let PAYOUT_PCT = Math.max(0.10, Math.min(1.00, Number(process.env.PAYOUT_PCT || 0.50)));
 
 const PROOF_AUTO = String(process.env.PROOF_AUTO || 'false').toLowerCase() === 'true';
 const PROOF_REMINDER_MIN = Number(process.env.PROOF_REMINDER_MIN || 30);
 const PRICE_SOURCE = process.env.PRICE_SOURCE || 'https://api.coingecko.com/api/v3/simple/price';
+const DEFAULT_PROOF = process.env.PROOF_MESSAGE || 'Latest Proof of Payout\n(Share latest TX link + winner here)\nVerified on-chain.';
 
-// Telegram (webhook)
 if (!TG_TOKEN) { console.error('Missing TELEGRAM_BOT_TOKEN'); process.exit(1); }
 
 const bot = new TelegramBot(TG_TOKEN);
@@ -59,14 +55,14 @@ const webhookPath = `/telegram/${encodeURIComponent(TG_TOKEN)}`;
 const fullWebhook = `${PUBLIC_URL}${webhookPath}`;
 
 const server = http.createServer(async (req, res) => {
-  const parsed = url.parse(req.url, true);
-  if (req.method === 'GET' && parsed.pathname === '/') {
+  const u = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === 'GET' && u.pathname === '/') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     return res.end('Vault50Bot OK');
   }
-  if (req.method === 'POST' && parsed.pathname === webhookPath) {
+  if (req.method === 'POST' && u.pathname === webhookPath) {
     let body = '';
-    req.on('data', chunk => (body += chunk));
+    req.on('data', c => (body += c));
     req.on('end', () => {
       try {
         const update = JSON.parse(body);
@@ -95,7 +91,6 @@ server.listen(PORT, async () => {
   console.log(`Watchers: ${ENABLE_WATCHERS ? 'ON' : 'OFF (webhook-only). Use /pool to view totals.'}`);
 });
 
-// Helpers
 function fmt(n, d = 8) {
   const out = Number(n).toFixed(d);
   return out.replace(/\.?0+$/, '');
@@ -107,12 +102,10 @@ async function postToChannel(text, extra = {}) {
 }
 function isAdmin(id) { return ADMIN_IDS.includes(id); }
 
-// Providers
 const providerETH = new ethers.JsonRpcProvider(RPC.ETH);
 const providerBNB = new ethers.JsonRpcProvider(RPC.BNB);
-const solConn     = new Connection(RPC.SOL, 'confirmed');
+const solConn = new Connection(RPC.SOL, 'confirmed');
 
-// Prices
 let priceCache = { ts: 0, data: { BTC: 0, ETH: 0, BNB: 0, SOL: 0 } };
 async function refreshPrices() {
   try {
@@ -147,11 +140,9 @@ function ticketsForUSD(usd, entryUsd = ENTRY_USD, tol = ENTRY_TOL) {
   return 0;
 }
 
-// Round state
 const COINS = ['BTC', 'ETH', 'BNB', 'SOL'];
 const rounds = COINS.reduce((acc, s) => (acc[s] = { id: 1, entries: [], startedAt: Date.now(), winner: null, proof: null }, acc), {});
 const grand = { usdTotal: 0 };
-
 function newRoundAll() {
   for (const s of COINS) {
     rounds[s] = { id: rounds[s].id + 1, entries: [], startedAt: Date.now(), winner: null, proof: null };
@@ -172,8 +163,6 @@ function buildTicketBag() {
   }
   return bag;
 }
-
-// Fairness seed sources
 async function fetchChainSeeds() {
   try {
     const [btcHead, ethBlock, solSlot] = await Promise.all([
@@ -184,8 +173,6 @@ async function fetchChainSeeds() {
     return { btcHead, ethHead: ethBlock, solSlot };
   } catch (_) { return { btcHead: '', ethHead: '', solSlot: '' }; }
 }
-
-// Draw and announce
 async function runUsdDraw() {
   const seedParts = await fetchChainSeeds();
   const bag = buildTicketBag();
@@ -219,15 +206,13 @@ async function runUsdDraw() {
       `seed.hash: ${h}`,
       `index: ${idx}/${bag.length - 1}`,
       '',
-      'Send payout to the winner address above (same chain).',
+      'Send payout to the winner address (same chain).',
       'After you send, submit: /proofpaid ' + winner.symbol + ' <tx> [amount]'
     ].join('\n')
   );
 
   global.__usd_round = { seedParts, bagLen: bag.length, hash: h, winner, startedAt: Date.now() };
 }
-
-// Manual proof + rotate
 async function finalizeUsdProofManual(symbol, txid, paidAmount) {
   const amtLine = paidAmount ? `Paid: ${fmt(Number(paidAmount), 6)} ${symbol}\n` : '';
   await postToChannel(
@@ -242,7 +227,6 @@ async function finalizeUsdProofManual(symbol, txid, paidAmount) {
   newRoundAll();
 }
 
-// Watchers
 const seen = new Set();
 
 async function pollBTC() {
@@ -255,8 +239,8 @@ async function pollBTC() {
     ]);
     const items = [...(confirmed.data || []), ...(mempool.data || [])];
     const funded = (addrInfo.data?.chain_stats?.funded_txo_sum || 0);
-    theSpent = (addrInfo.data?.chain_stats?.spent_txo_sum || 0);
-    const totalBtc = (funded - theSpent) / 1e8;
+    const spent = (addrInfo.data?.chain_stats?.spent_txo_sum || 0);
+    const totalBtc = (funded - spent) / 1e8;
 
     for (const tx of items.slice(0, 60)) {
       const txid = tx.txid;
@@ -438,7 +422,6 @@ async function pollSOL() {
   } catch (_) {}
 }
 
-// Start watchers
 if (ENABLE_WATCHERS) {
   setInterval(pollBTC, 20000);
   setInterval(pollETH, 12000);
@@ -446,18 +429,28 @@ if (ENABLE_WATCHERS) {
   setInterval(pollSOL, 20000);
 }
 
-// Commands (public)
-bot.onText(/^\/start(?:@\w+)?$/i, (msg) => {
-  bot.sendMessage(
-    msg.chat.id,
-    [
-      'Welcome to Vault50.',
-      `Entry: $${ENTRY_USD.toFixed(2)} (+/- ${Math.round(ENTRY_TOL * 100)}%)`,
-      `Target pot: $${ROUND_TARGET_USD.toFixed(2)}`,
-      'Use /help for commands.'
-    ].join('\n'),
-    { disable_web_page_preview: true }
-  );
+function howToEnterText(){
+  return [
+    'How to Enter:',
+    `1) Send $${ENTRY_USD.toFixed(2)} worth of BTC, ETH, BNB, or SOL to one of our verified wallets (/audit).`,
+    `2) Each valid $${ENTRY_USD.toFixed(2)} deposit = 1 entry.`,
+    `3) Once the total pool reaches $${ROUND_TARGET_USD.toFixed(2)}, the bot automatically selects a random verified entrant.`,
+    `4) The winner receives ${Math.round(PAYOUT_PCT * 100)}% of the total pot.`,
+    '',
+    'All entries and payouts are verified on-chain.',
+    'Use /pool for live totals or /proof to view the latest payout.'
+  ].join('\n');
+}
+
+bot.onText(/^\/start(?:@\w+)?$/i, (msg)=>{
+  bot.sendMessage(msg.chat.id, [
+    'Welcome to Vault50.',
+    `Entry: $${ENTRY_USD.toFixed(2)} (±${Math.round(ENTRY_TOL*100)}%)`,
+    `Target pot: $${ROUND_TARGET_USD.toFixed(2)}`,
+    `Winner receives ${Math.round(PAYOUT_PCT * 100)}% of the pot.`,
+    '',
+    howToEnterText()
+  ].join('\n'), { disable_web_page_preview: true });
 });
 
 bot.onText(/^\/help(?:@\w+)?$/i, (msg) => {
@@ -465,15 +458,38 @@ bot.onText(/^\/help(?:@\w+)?$/i, (msg) => {
     msg.chat.id,
     [
       'Commands:',
-      '/pool - live pool totals',
-      '/target - USD target and progress',
-      '/proof - latest payout proof',
-      '/stats - system stats',
-      '/audit - official wallets',
-      '/verify - how to verify on-chain'
+      '/howtoenter - How to enter and rules',
+      '/pool - Live pool totals',
+      '/target - Pot progress',
+      '/proof - Latest payout proof',
+      '/audit - Official wallets',
+      '/verify - How to verify on-chain',
+      '/stats - System stats'
     ].join('\n'),
     { disable_web_page_preview: true }
   );
+});
+
+bot.onText(/^\/howtoenter(?:@\w+)?$/i, (msg) => {
+  bot.sendMessage(msg.chat.id, howToEnterText(), { disable_web_page_preview: true });
+});
+
+bot.on('new_chat_members', async (msg) => {
+  const welcome = [
+    'Welcome to Vault50.',
+    '',
+    `Entry: $${ENTRY_USD.toFixed(2)} in BTC / ETH / BNB / SOL`,
+    `Target: $${ROUND_TARGET_USD.toFixed(2)}`,
+    `Winner receives ${Math.round(PAYOUT_PCT * 100)}% of the pot.`,
+    '',
+    howToEnterText(),
+    '',
+    'Quick commands:',
+    '/howtoenter  /pool  /target  /proof  /audit  /help'
+  ];
+  try {
+    await bot.sendMessage(msg.chat.id, welcome.join('\n'), { disable_web_page_preview: true });
+  } catch (_) {}
 });
 
 bot.onText(/^\/pool(?:\s+update)?(?:@\w+)?$/i, async (msg) => {
@@ -512,6 +528,7 @@ bot.onText(/^\/pool(?:\s+update)?(?:@\w+)?$/i, async (msg) => {
 });
 
 bot.onText(/^\/proof(?:@\w+)?$/i, (msg) => bot.sendMessage(msg.chat.id, DEFAULT_PROOF));
+
 bot.onText(/^\/stats(?:@\w+)?$/i, (msg) => {
   const uptimeH = Math.floor(process.uptime() / 3600);
   bot.sendMessage(
@@ -525,6 +542,7 @@ bot.onText(/^\/stats(?:@\w+)?$/i, (msg) => {
     ].join('\n')
   );
 });
+
 bot.onText(/^\/audit(?:@\w+)?$/i, (msg) => {
   bot.sendMessage(
     msg.chat.id,
@@ -537,6 +555,7 @@ bot.onText(/^\/audit(?:@\w+)?$/i, (msg) => {
     ].join('\n')
   );
 });
+
 bot.onText(/^\/verify(?:@\w+)?$/i, (msg) => {
   bot.sendMessage(
     msg.chat.id,
@@ -548,6 +567,7 @@ bot.onText(/^\/verify(?:@\w+)?$/i, (msg) => {
     ].join('\n')
   );
 });
+
 bot.onText(/^\/target(?:@\w+)?$/i, (msg) => {
   const pct = Math.min(100, Math.round(100 * grand.usdTotal / ROUND_TARGET_USD));
   bot.sendMessage(
@@ -560,7 +580,6 @@ bot.onText(/^\/target(?:@\w+)?$/i, (msg) => {
   );
 });
 
-// Admin (DM only)
 bot.onText(/^\/announce\s+(.+)/i, async (msg, m) => {
   if (!isAdmin(msg.from.id)) return;
   await postToChannel(`Announcement\n${m[1].trim()}`);
@@ -594,8 +613,6 @@ bot.onText(/^\/restartround$/i, (msg) => {
   newRoundAll();
   bot.sendMessage(msg.chat.id, `New USD round opened. Progress reset to $0 / $${ROUND_TARGET_USD.toFixed(2)}.`);
 });
-
-// Manual proof submit
 bot.onText(/^\/proofpaid\s+(BTC|ETH|BNB|SOL)\s+(\S+)(?:\s+([0-9]*\.?[0-9]+))?$/i, async (msg, m) => {
   if (!isAdmin(msg.from.id)) return;
   const symbol = m[1].toUpperCase();
@@ -605,14 +622,6 @@ bot.onText(/^\/proofpaid\s+(BTC|ETH|BNB|SOL)\s+(\S+)(?:\s+([0-9]*\.?[0-9]+))?$/i
   await bot.sendMessage(msg.chat.id, 'Proof posted and round rotated.');
 });
 
-// Welcome hook (if used in groups)
-bot.on('new_chat_members', async (msg) => {
-  for (const user of msg.new_chat_members) {
-    await bot.sendMessage(msg.chat.id, 'Welcome to Vault50. Use /help for commands.');
-  }
-});
-
-// Daily summary
 async function postDailySummary() {
   try {
     const btcInfo = await axios.get(`${RPC.BTC}/address/${ADDR.BTC}`, { timeout: 15000 }).then(r => r.data).catch(() => ({}));
@@ -645,5 +654,4 @@ async function postDailySummary() {
 }
 setInterval(postDailySummary, 24 * 60 * 60 * 1000);
 
-// Prime prices
 refreshPrices().catch(() => {});
